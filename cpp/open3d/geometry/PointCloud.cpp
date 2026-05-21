@@ -660,6 +660,83 @@ PointCloud::RemoveStatisticalOutliers(size_t nb_neighbors,
     return std::make_tuple(SelectByIndex(indices), indices);
 }
 
+std::shared_ptr<PointCloud> PointCloud::BilateralFilter(
+        int num_iterations /* = 1 */,
+        double sigma_s /* = 1.0 */,
+        double sigma_n /* = 1.0 */) const {
+    if (!HasNormals()) {
+        utility::LogError(
+                "PointCloud must have normals to apply BilateralFilter. "
+                "Call EstimateNormals() first.");
+    }
+    if (sigma_s <= 0 || sigma_n <= 0) {
+        utility::LogError("sigma_s and sigma_n must be positive values.");
+    }
+    if (num_iterations <= 0) {
+        utility::LogError("num_iterations must be a positive value.");
+    }
+
+    // Work on a copy so each iteration reads clean positions
+    auto cloud = std::make_shared<PointCloud>(*this);
+
+    KDTreeFlann kdtree;
+    const double radius = 3.0 * sigma_s;
+    const double sigma_s2 = 2.0 * sigma_s * sigma_s;
+    const double sigma_n2 = 2.0 * sigma_n * sigma_n;
+
+    for (int iter = 0; iter < num_iterations; iter++) {
+        kdtree.SetGeometry(*cloud);
+        std::vector<Eigen::Vector3d> new_points(cloud->points_.size());
+
+#pragma omp parallel for schedule(static) \
+        num_threads(utility::EstimateMaxThreads())
+        for (int i = 0; i < int(cloud->points_.size()); i++) {
+            std::vector<int> indices;
+            std::vector<double> dist2;
+            kdtree.SearchRadius(cloud->points_[i], radius, indices, dist2);
+
+            const Eigen::Vector3d &pi = cloud->points_[i];
+            const Eigen::Vector3d &ni = cloud->normals_[i];
+
+            // Each point moves along its normal by a weighted average of
+            // normal-direction displacements from neighbors. This is the
+            // surface bilateral filter from Jones, Durand & Zwicker 2004:
+            // points only shift perpendicular to the tangent plane, so
+            // tangential position and sharp edges are preserved.
+            double weighted_displacement = 0.0;
+            double total_weight = 0.0;
+
+            for (size_t j = 0; j < indices.size(); j++) {
+                int idx = indices[j];
+                const Eigen::Vector3d &pj = cloud->points_[idx];
+
+                // Spatial weight: penalise distant neighbours
+                double ws = std::exp(-dist2[j] / sigma_s2);
+
+                // Range weight: penalise neighbours far along the normal
+                // direction (across edges / sharp features)
+                double normal_dist = (pj - pi).dot(ni);
+                double wn =
+                        std::exp(-(normal_dist * normal_dist) / sigma_n2);
+
+                double w = ws * wn;
+                weighted_displacement += w * normal_dist;
+                total_weight += w;
+            }
+
+            if (total_weight > 0.0) {
+                new_points[i] =
+                        pi + ni * (weighted_displacement / total_weight);
+            } else {
+                new_points[i] = pi;
+            }
+        }
+        cloud->points_ = new_points;
+    }
+
+    return cloud;
+}
+
 std::vector<Eigen::Matrix3d> PointCloud::EstimatePerPointCovariances(
         const PointCloud &input,
         const KDTreeSearchParam &search_param /* = KDTreeSearchParamKNN()*/) {

@@ -221,6 +221,20 @@ public:
                               double std_ratio,
                               bool print_progress = false) const;
 
+    /// \brief Function to smooth a point cloud using a bilateral filter.
+    ///
+    /// Applies bilateral filtering to reduce noise while preserving sharp
+    /// features. The point cloud must have normals.
+    ///
+    /// \param num_iterations Number of times to apply the filter.
+    /// \param sigma_s Spatial standard deviation; controls how much weight
+    /// is given to spatially distant neighbors.
+    /// \param sigma_n Normal standard deviation; controls how much weight
+    /// is given to neighbors with dissimilar normals (edge preservation).
+    std::shared_ptr<PointCloud> BilateralFilter(int num_iterations = 1,
+                                                double sigma_s = 1.0,
+                                                double sigma_n = 1.0) const;
+
     /// \brief Function to compute the normals of a point cloud.
     ///
     /// Normals are oriented with respect to the input point cloud if normals

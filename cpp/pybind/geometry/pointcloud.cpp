@@ -132,6 +132,12 @@ void pybind_pointcloud_definitions(py::module &m) {
                  "Removes points that are further away from their neighbors in "
                  "average.",
                  "nb_neighbors"_a, "std_ratio"_a, "print_progress"_a = false)
+            .def("bilateral_filter", &PointCloud::BilateralFilter,
+                 "Smooths a point cloud using a bilateral filter that reduces "
+                 "noise while preserving sharp features. The point cloud must "
+                 "have normals.",
+                 "num_iterations"_a = 1, "sigma_s"_a = 1.0,
+                 "sigma_n"_a = 1.0)
             .def("estimate_normals", &PointCloud::EstimateNormals,
                  "Function to compute the normals of a point cloud. Normals "
                  "are oriented with respect to the input point cloud if "

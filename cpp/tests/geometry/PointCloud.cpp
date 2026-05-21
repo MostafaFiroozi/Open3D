@@ -1538,5 +1538,52 @@ TEST(PointCloud, CreateFromRGBDImage) {
     // visualization::DrawGeometries({pcd}); // Uncomment for manual check
 }
 
+TEST(PointCloud, BilateralFilter_OutputSameSize) {
+    // Filtered cloud must have the same number of points as input
+    geometry::PointCloud pcd;
+    for (int i = 0; i < 100; i++) {
+        pcd.points_.push_back(
+                Eigen::Vector3d(i * 0.01, std::sin(i * 0.1), 0.0));
+        pcd.normals_.push_back(Eigen::Vector3d(0, 0, 1));
+    }
+    auto filtered = pcd.BilateralFilter(1, 0.05, 0.01);
+    EXPECT_EQ(filtered->points_.size(), pcd.points_.size());
+}
+
+TEST(PointCloud, BilateralFilter_ReducesNoise) {
+    // Filter should bring noisy flat surface closer to z=0 ground truth
+    geometry::PointCloud pcd;
+    std::srand(42);
+    const int N = 200;
+    const double noise_sigma = 0.01;
+    for (int i = 0; i < N; i++) {
+        double x = (i % 20) * 0.05;
+        double y = (i / 20) * 0.05;
+        double noise = noise_sigma * ((std::rand() / double(RAND_MAX)) * 2 - 1);
+        pcd.points_.push_back(Eigen::Vector3d(x, y, noise));
+        pcd.normals_.push_back(Eigen::Vector3d(0, 0, 1));
+    }
+
+    double rmse_before = 0.0;
+    for (auto& p : pcd.points_) rmse_before += p.z() * p.z();
+    rmse_before = std::sqrt(rmse_before / N);
+
+    auto filtered = pcd.BilateralFilter(3, 0.1, 0.01);
+
+    double rmse_after = 0.0;
+    for (auto& p : filtered->points_) rmse_after += p.z() * p.z();
+    rmse_after = std::sqrt(rmse_after / N);
+
+    EXPECT_LT(rmse_after, rmse_before);
+}
+
+TEST(PointCloud, BilateralFilter_RequiresNormals) {
+    // Must throw when called on a cloud with no normals
+    geometry::PointCloud pcd;
+    pcd.points_.push_back(Eigen::Vector3d(0, 0, 0));
+    pcd.points_.push_back(Eigen::Vector3d(1, 0, 0));
+    EXPECT_THROW(pcd.BilateralFilter(1, 0.1, 0.1), std::runtime_error);
+}
+
 }  // namespace tests
 }  // namespace open3d
