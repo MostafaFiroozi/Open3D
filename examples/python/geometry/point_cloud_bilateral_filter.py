@@ -49,6 +49,12 @@ if __name__ == "__main__":
     print(f"RMSE before filtering: {np.sqrt(np.mean(dists_before**2)):.6f}")
     print(f"RMSE after  filtering: {np.sqrt(np.mean(dists_after**2)):.6f}")
 
+    # Recompute normals from each cloud's own points for fair shading
+    pcd_noisy.estimate_normals(
+        search_param=o3d.geometry.KDTreeSearchParamKNN(knn=30))
+    pcd_filtered.estimate_normals(
+        search_param=o3d.geometry.KDTreeSearchParamKNN(knn=30))
+
     # Visualize side by side
     pcd_noisy.paint_uniform_color([1.0, 0.5, 0.0])    # orange = noisy
     pcd_filtered.paint_uniform_color([0.2, 0.7, 0.2]) # green  = filtered
