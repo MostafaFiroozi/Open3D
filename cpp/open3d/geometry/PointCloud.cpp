@@ -696,7 +696,11 @@ std::shared_ptr<PointCloud> PointCloud::BilateralFilter(
             kdtree.SearchRadius(cloud->points_[i], radius, indices, dist2);
 
             const Eigen::Vector3d &pi = cloud->points_[i];
-            const Eigen::Vector3d &ni = cloud->normals_[i];
+            // Normalize a local copy: HasNormals() only checks size, so
+            // callers may pass non-unit normals. A non-unit ni would scale
+            // both the measured normal_dist and the applied displacement,
+            // distorting the filter.
+            const Eigen::Vector3d ni = cloud->normals_[i].normalized();
 
             // Each point moves along its normal by a weighted average of
             // normal-direction displacements from neighbors. This is the
