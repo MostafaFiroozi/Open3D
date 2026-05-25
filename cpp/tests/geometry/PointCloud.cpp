@@ -1621,6 +1621,39 @@ TEST(PointCloud, BilateralFilter_MaxNNCapsNeighborhood) {
     }
 }
 
+TEST(PointCloud, BilateralFilter_ExpectedDisplacement) {
+    // Three collinear points with +z normals: two flat neighbours and a
+    // noisy centre. The KDTree includes the query point itself, so the
+    // centre point sees three neighbours (self + two), and the expected
+    // displacement is computable in closed form from the spatial/range
+    // Gaussian weights. This locks down the actual formula rather than
+    // just a behavioural property.
+    geometry::PointCloud pcd;
+    pcd.points_ = {Eigen::Vector3d(-1.0, 0.0, 0.0),
+                   Eigen::Vector3d(0.0, 0.0, 0.3),
+                   Eigen::Vector3d(1.0, 0.0, 0.0)};
+    pcd.normals_ = {Eigen::Vector3d(0, 0, 1), Eigen::Vector3d(0, 0, 1),
+                    Eigen::Vector3d(0, 0, 1)};
+
+    const double sigma_s = 1.0;
+    const double sigma_n = 0.5;
+    auto filtered = pcd.BilateralFilter(/*num_iterations=*/1, sigma_s, sigma_n,
+                                        /*max_nn=*/10);
+
+    // For the centre point (index 1):
+    //   self:      dist2 = 0,    normal_dist =  0
+    //   each side: dist2 = 1.09, normal_dist = -0.3
+    const double sigma_s2 = 2.0 * sigma_s * sigma_s;
+    const double sigma_n2 = 2.0 * sigma_n * sigma_n;
+    const double w = std::exp(-1.09 / sigma_s2) * std::exp(-0.09 / sigma_n2);
+    const double displacement = (2.0 * w * -0.3) / (1.0 + 2.0 * w);
+
+    ASSERT_EQ(filtered->points_.size(), 3u);
+    EXPECT_NEAR(filtered->points_[1].x(), 0.0, 1e-12);
+    EXPECT_NEAR(filtered->points_[1].y(), 0.0, 1e-12);
+    EXPECT_NEAR(filtered->points_[1].z(), 0.3 + displacement, 1e-12);
+}
+
 TEST(PointCloud, BilateralFilter_PreservesAuxiliaryArrays) {
     // Normals and colors are copied from the input, not re-estimated. Size
     // and per-point values must match the source cloud.
