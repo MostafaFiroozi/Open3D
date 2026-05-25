@@ -133,9 +133,16 @@ void pybind_pointcloud_definitions(py::module &m) {
                  "average.",
                  "nb_neighbors"_a, "std_ratio"_a, "print_progress"_a = false)
             .def("bilateral_filter", &PointCloud::BilateralFilter,
-                 "Smooths a point cloud using a bilateral filter that reduces "
-                 "noise while preserving sharp features. The point cloud must "
-                 "have normals.",
+                 "Smooths a point cloud using the surface bilateral filter "
+                 "of Jones, Durand & Zwicker (2004): each point is shifted "
+                 "along its normal by a weighted average of signed distances "
+                 "from neighbors to its tangent plane. Sharp features are "
+                 "preserved when sigma_n is small, since neighbors across an "
+                 "edge then contribute little weight. max_nn caps the "
+                 "per-point neighborhood size for dense clouds. Only "
+                 "positions are filtered; the returned cloud's normals, "
+                 "colors, and covariances are copied unchanged. The point "
+                 "cloud must have normals.",
                  "num_iterations"_a = 1, "sigma_s"_a = 1.0,
                  "sigma_n"_a = 1.0, "max_nn"_a = 64)
             .def("estimate_normals", &PointCloud::EstimateNormals,
