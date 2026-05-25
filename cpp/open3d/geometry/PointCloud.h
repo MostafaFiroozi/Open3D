@@ -236,6 +236,12 @@ public:
     /// controls how much weight is given to neighbors whose projection onto
     /// the point's normal is far from zero. Smaller values preserve sharp
     /// features more strongly.
+    ///
+    /// \note Only the point positions are filtered. The returned cloud
+    /// carries copies of the input's normals, colors, and covariances; they
+    /// are not re-estimated. If downstream code (e.g. shading, registration)
+    /// requires normals or covariances consistent with the filtered surface,
+    /// call EstimateNormals() / EstimateCovariances() on the returned cloud.
     std::shared_ptr<PointCloud> BilateralFilter(int num_iterations = 1,
                                                 double sigma_s = 1.0,
                                                 double sigma_n = 1.0) const;
