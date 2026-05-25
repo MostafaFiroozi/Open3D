@@ -701,10 +701,17 @@ std::shared_ptr<PointCloud> PointCloud::BilateralFilter(
                                 dist2);
 
             const Eigen::Vector3d &pi = cloud->points_[i];
-            // Normalize a local copy: HasNormals() only checks size, so
-            // callers may pass non-unit normals. A non-unit ni would scale
-            // both the measured normal_dist and the applied displacement,
-            // distorting the filter.
+            // Skip points with zero-length normals: HasNormals() only checks
+            // size, so callers may pass degenerate normals from a failed
+            // estimation. .normalized() on a zero vector yields NaN, which
+            // would corrupt the cloud for subsequent iterations.
+            if (cloud->normals_[i].norm() == 0.0) {
+                new_points[i] = pi;
+                continue;
+            }
+            // Normalize a local copy: callers may pass non-unit normals, and a
+            // non-unit ni would scale both the measured normal_dist and the
+            // applied displacement, distorting the filter.
             const Eigen::Vector3d ni = cloud->normals_[i].normalized();
 
             // Each point moves along its normal by a weighted average of
