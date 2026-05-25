@@ -1585,5 +1585,112 @@ TEST(PointCloud, BilateralFilter_RequiresNormals) {
     EXPECT_THROW(pcd.BilateralFilter(1, 0.1, 0.1), std::runtime_error);
 }
 
+TEST(PointCloud, BilateralFilter_InvalidParameters) {
+    // num_iterations <= 0 and sigma_s/sigma_n <= 0 must be rejected
+    geometry::PointCloud pcd;
+    pcd.points_.push_back(Eigen::Vector3d(0, 0, 0));
+    pcd.points_.push_back(Eigen::Vector3d(1, 0, 0));
+    pcd.normals_.push_back(Eigen::Vector3d(0, 0, 1));
+    pcd.normals_.push_back(Eigen::Vector3d(0, 0, 1));
+
+    EXPECT_THROW(pcd.BilateralFilter(0, 1.0, 1.0), std::runtime_error);
+    EXPECT_THROW(pcd.BilateralFilter(-1, 1.0, 1.0), std::runtime_error);
+    EXPECT_THROW(pcd.BilateralFilter(1, 0.0, 1.0), std::runtime_error);
+    EXPECT_THROW(pcd.BilateralFilter(1, -0.5, 1.0), std::runtime_error);
+    EXPECT_THROW(pcd.BilateralFilter(1, 1.0, 0.0), std::runtime_error);
+    EXPECT_THROW(pcd.BilateralFilter(1, 1.0, -0.5), std::runtime_error);
+}
+
+TEST(PointCloud, BilateralFilter_PreservesAuxiliaryArrays) {
+    // Normals and colors are copied from the input, not re-estimated. Size
+    // and per-point values must match the source cloud.
+    geometry::PointCloud pcd;
+    for (int i = 0; i < 10; i++) {
+        pcd.points_.push_back(Eigen::Vector3d(i * 0.1, 0, 0));
+        pcd.normals_.push_back(Eigen::Vector3d(0, 0, 1));
+        pcd.colors_.push_back(Eigen::Vector3d(0.2, 0.4, 0.6));
+    }
+    auto filtered = pcd.BilateralFilter(1, 0.1, 0.1);
+    ASSERT_EQ(filtered->normals_.size(), pcd.normals_.size());
+    ASSERT_EQ(filtered->colors_.size(), pcd.colors_.size());
+    for (size_t i = 0; i < pcd.points_.size(); i++) {
+        ExpectEQ(filtered->normals_[i], pcd.normals_[i]);
+        ExpectEQ(filtered->colors_[i], pcd.colors_[i]);
+    }
+}
+
+TEST(PointCloud, BilateralFilter_FlatSurfaceIsIdempotent) {
+    // On a perfectly flat surface with consistent normals, every neighbor
+    // has signed normal-distance 0, so the weighted displacement is 0 and
+    // every point must be returned exactly unchanged.
+    geometry::PointCloud pcd;
+    for (int i = 0; i < 5; i++) {
+        for (int j = 0; j < 5; j++) {
+            pcd.points_.push_back(Eigen::Vector3d(i * 0.1, j * 0.1, 0.0));
+            pcd.normals_.push_back(Eigen::Vector3d(0, 0, 1));
+        }
+    }
+    auto filtered = pcd.BilateralFilter(2, 0.2, 0.05);
+    ASSERT_EQ(filtered->points_.size(), pcd.points_.size());
+    for (size_t i = 0; i < pcd.points_.size(); i++) {
+        ExpectEQ(filtered->points_[i], pcd.points_[i], 1e-12);
+    }
+}
+
+TEST(PointCloud, BilateralFilter_PreservesSharpEdge) {
+    // Two half-planes meet at x = 0 to form a sharp ridge. With sigma_n
+    // small relative to the cross-edge signed normal-distance, neighbours
+    // on the opposite face are heavily down-weighted, so the ridge must
+    // survive filtering. A non-edge-preserving smoother (e.g. plain
+    // weighted average along the normal) would drift the ridge point
+    // toward the average plane by ~ the local sample spacing.
+    geometry::PointCloud pcd;
+    const double inv_sqrt2 = 1.0 / std::sqrt(2.0);
+    for (int i = -10; i <= 10; i++) {
+        double x = i * 0.05;
+        double z = std::abs(x);
+        Eigen::Vector3d n =
+                (x < 0) ? Eigen::Vector3d(inv_sqrt2, 0, inv_sqrt2)
+                : (x > 0) ? Eigen::Vector3d(-inv_sqrt2, 0, inv_sqrt2)
+                          : Eigen::Vector3d(0, 0, 1);
+        pcd.points_.push_back(Eigen::Vector3d(x, 0, z));
+        pcd.normals_.push_back(n);
+    }
+    auto original_points = pcd.points_;
+    auto filtered = pcd.BilateralFilter(2, 0.15, 0.01);
+    double max_drift = 0.0;
+    for (size_t i = 0; i < original_points.size(); i++) {
+        max_drift = std::max(
+                max_drift,
+                (filtered->points_[i] - original_points[i]).norm());
+    }
+    EXPECT_LT(max_drift, 0.01);
+}
+
+TEST(PointCloud, BilateralFilter_NonUnitNormalsMatchUnit) {
+    // BilateralFilter normalizes its local copy of each normal, so scaling
+    // every input normal by a constant factor must produce identical
+    // filtered positions.
+    geometry::PointCloud pcd_unit;
+    geometry::PointCloud pcd_scaled;
+    std::srand(7);
+    for (int i = 0; i < 50; i++) {
+        double x = (i % 10) * 0.1;
+        double y = (i / 10) * 0.1;
+        double z = 0.02 * ((std::rand() / double(RAND_MAX)) * 2 - 1);
+        Eigen::Vector3d p(x, y, z);
+        pcd_unit.points_.push_back(p);
+        pcd_unit.normals_.push_back(Eigen::Vector3d(0, 0, 1));
+        pcd_scaled.points_.push_back(p);
+        pcd_scaled.normals_.push_back(Eigen::Vector3d(0, 0, 3.7));
+    }
+    auto out_unit = pcd_unit.BilateralFilter(2, 0.15, 0.03);
+    auto out_scaled = pcd_scaled.BilateralFilter(2, 0.15, 0.03);
+    ASSERT_EQ(out_unit->points_.size(), out_scaled->points_.size());
+    for (size_t i = 0; i < out_unit->points_.size(); i++) {
+        ExpectEQ(out_unit->points_[i], out_scaled->points_[i], 1e-12);
+    }
+}
+
 }  // namespace tests
 }  // namespace open3d
