@@ -1599,6 +1599,26 @@ TEST(PointCloud, BilateralFilter_InvalidParameters) {
     EXPECT_THROW(pcd.BilateralFilter(1, -0.5, 1.0), std::runtime_error);
     EXPECT_THROW(pcd.BilateralFilter(1, 1.0, 0.0), std::runtime_error);
     EXPECT_THROW(pcd.BilateralFilter(1, 1.0, -0.5), std::runtime_error);
+    EXPECT_THROW(pcd.BilateralFilter(1, 1.0, 1.0, 0), std::runtime_error);
+    EXPECT_THROW(pcd.BilateralFilter(1, 1.0, 1.0, -3), std::runtime_error);
+}
+
+TEST(PointCloud, BilateralFilter_MaxNNCapsNeighborhood) {
+    // With many candidates inside the search radius, max_nn must cap the
+    // neighborhood used per point. Capping at 1 forces each point to only
+    // see itself, which makes the bilateral update a no-op: the cloud
+    // must be returned unchanged regardless of sigma values.
+    geometry::PointCloud pcd;
+    for (int i = 0; i < 30; i++) {
+        pcd.points_.push_back(Eigen::Vector3d(i * 0.001, 0, 0.001));
+        pcd.normals_.push_back(Eigen::Vector3d(0, 0, 1));
+    }
+    auto original_points = pcd.points_;
+    auto filtered = pcd.BilateralFilter(3, 1.0, 1.0, /*max_nn=*/1);
+    ASSERT_EQ(filtered->points_.size(), original_points.size());
+    for (size_t i = 0; i < original_points.size(); i++) {
+        ExpectEQ(filtered->points_[i], original_points[i], 1e-12);
+    }
 }
 
 TEST(PointCloud, BilateralFilter_PreservesAuxiliaryArrays) {

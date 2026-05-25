@@ -137,7 +137,7 @@ void pybind_pointcloud_definitions(py::module &m) {
                  "noise while preserving sharp features. The point cloud must "
                  "have normals.",
                  "num_iterations"_a = 1, "sigma_s"_a = 1.0,
-                 "sigma_n"_a = 1.0)
+                 "sigma_n"_a = 1.0, "max_nn"_a = 64)
             .def("estimate_normals", &PointCloud::EstimateNormals,
                  "Function to compute the normals of a point cloud. Normals "
                  "are oriented with respect to the input point cloud if "

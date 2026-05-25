@@ -663,7 +663,8 @@ PointCloud::RemoveStatisticalOutliers(size_t nb_neighbors,
 std::shared_ptr<PointCloud> PointCloud::BilateralFilter(
         int num_iterations /* = 1 */,
         double sigma_s /* = 1.0 */,
-        double sigma_n /* = 1.0 */) const {
+        double sigma_n /* = 1.0 */,
+        int max_nn /* = 64 */) const {
     if (!HasNormals()) {
         utility::LogError(
                 "PointCloud must have normals to apply BilateralFilter. "
@@ -674,6 +675,9 @@ std::shared_ptr<PointCloud> PointCloud::BilateralFilter(
     }
     if (num_iterations <= 0) {
         utility::LogError("num_iterations must be a positive value.");
+    }
+    if (max_nn <= 0) {
+        utility::LogError("max_nn must be a positive value.");
     }
 
     // Work on a copy so each iteration reads clean positions
@@ -693,7 +697,8 @@ std::shared_ptr<PointCloud> PointCloud::BilateralFilter(
         for (int i = 0; i < int(cloud->points_.size()); i++) {
             std::vector<int> indices;
             std::vector<double> dist2;
-            kdtree.SearchRadius(cloud->points_[i], radius, indices, dist2);
+            kdtree.SearchHybrid(cloud->points_[i], radius, max_nn, indices,
+                                dist2);
 
             const Eigen::Vector3d &pi = cloud->points_[i];
             // Normalize a local copy: HasNormals() only checks size, so

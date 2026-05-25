@@ -236,6 +236,10 @@ public:
     /// controls how much weight is given to neighbors whose projection onto
     /// the point's normal is far from zero. Smaller values preserve sharp
     /// features more strongly.
+    /// \param max_nn Maximum number of neighbors used per point. The
+    /// neighborhood is the intersection of a ball of radius 3 * sigma_s and
+    /// the max_nn nearest points, so this caps per-iteration cost on dense
+    /// clouds where the radius would otherwise return many points.
     ///
     /// \note Only the point positions are filtered. The returned cloud
     /// carries copies of the input's normals, colors, and covariances; they
@@ -244,7 +248,8 @@ public:
     /// call EstimateNormals() / EstimateCovariances() on the returned cloud.
     std::shared_ptr<PointCloud> BilateralFilter(int num_iterations = 1,
                                                 double sigma_s = 1.0,
-                                                double sigma_n = 1.0) const;
+                                                double sigma_n = 1.0,
+                                                int max_nn = 64) const;
 
     /// \brief Function to compute the normals of a point cloud.
     ///
