@@ -223,14 +223,19 @@ public:
 
     /// \brief Function to smooth a point cloud using a bilateral filter.
     ///
-    /// Applies bilateral filtering to reduce noise while preserving sharp
-    /// features. The point cloud must have normals.
+    /// Applies the surface bilateral filter of Jones, Durand & Zwicker
+    /// (2004): each point is shifted along its normal by a weighted average
+    /// of the signed distances from neighbors to its tangent plane. This
+    /// reduces noise while preserving sharp features, since neighbors across
+    /// an edge contribute little weight. The point cloud must have normals.
     ///
     /// \param num_iterations Number of times to apply the filter.
     /// \param sigma_s Spatial standard deviation; controls how much weight
     /// is given to spatially distant neighbors.
-    /// \param sigma_n Normal standard deviation; controls how much weight
-    /// is given to neighbors with dissimilar normals (edge preservation).
+    /// \param sigma_n Range (signed normal-distance) standard deviation;
+    /// controls how much weight is given to neighbors whose projection onto
+    /// the point's normal is far from zero. Smaller values preserve sharp
+    /// features more strongly.
     std::shared_ptr<PointCloud> BilateralFilter(int num_iterations = 1,
                                                 double sigma_s = 1.0,
                                                 double sigma_n = 1.0) const;
